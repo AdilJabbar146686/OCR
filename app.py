@@ -1,13 +1,35 @@
 import streamlit as st
+import cv2
+import numpy as np
 from PIL import Image
 import pytesseract
 from gtts import gTTS
 import tempfile
-import base64
 
-def extract_text(image: Image.Image) -> str:
-    """Extract text from image using Tesseract OCR."""
-    return pytesseract.image_to_string(image).strip()
+def preprocess_image(image: Image.Image) -> np.ndarray:
+    """Preprocess image for better OCR using OpenCV."""
+    img = np.array(image.convert("RGB"))
+
+    # Convert to grayscale
+    gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+
+    # Remove noise
+    blur = cv2.medianBlur(gray, 3)
+
+    # Apply adaptive thresholding
+    thresh = cv2.adaptiveThreshold(
+        blur, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2
+    )
+
+    # Dilation to enhance characters
+    kernel = np.ones((2, 2), np.uint8)
+    dilated = cv2.dilate(thresh, kernel, iterations=1)
+
+    return dilated
+
+def extract_text(preprocessed_img: np.ndarray) -> str:
+    """Extract text from preprocessed image using Tesseract."""
+    return pytesseract.image_to_string(preprocessed_img).strip()
 
 def text_to_speech(text: str) -> bytes:
     """Convert text to speech and return audio bytes."""
@@ -20,40 +42,57 @@ def text_to_speech(text: str) -> bytes:
 
 # --- Streamlit UI ---
 
-st.set_page_config(page_title="OCR + TTS", page_icon="🧠")
-st.title("📷 Image to Text + Text to Speech")
+st.set_page_config(page_title="Text Reader for the Blind", layout="centered")
 
-image_input = st.radio("Choose Input Method:", ["Upload Image", "Use Camera"])
+st.markdown(
+    "<h1 style='text-align: center;'>📷 SpeakText - Scan and Listen</h1>",
+    unsafe_allow_html=True,
+)
+st.markdown(
+    "<p style='text-align: center;'>Point your camera at printed text. The app will read it out loud automatically.</p>",
+    unsafe_allow_html=True,
+)
 
-if image_input == "Upload Image":
-    uploaded_file = st.file_uploader("📤 Upload an image", type=["png", "jpg", "jpeg"])
-else:
-    uploaded_file = st.camera_input("📸 Take a photo")
+# --- Camera input only ---
+camera_image = st.camera_input("📸 Tap to Capture", key="camera")
 
-if uploaded_file:
-    image = Image.open(uploaded_file)
-    st.image(image, caption="Input Image", use_column_width=True)
+if camera_image:
+    image = Image.open(camera_image)
 
-    with st.spinner("🔍 Extracting text..."):
-        extracted_text = extract_text(image)
+    with st.spinner("🧠 Processing image and extracting text..."):
+        preprocessed = preprocess_image(image)
+        extracted_text = extract_text(preprocessed)
 
     if extracted_text:
-        st.success("✅ Text Extracted:")
-        st.text_area("📝 Extracted Text", extracted_text, height=200)
+        st.success("✅ Text detected and spoken!")
+        st.markdown("### 📝 Extracted Text")
+        st.text_area("Extracted Text", extracted_text, height=200)
 
-        if st.button("🎧 Convert to Speech"):
-            with st.spinner("🔊 Generating Audio..."):
-                audio_bytes = text_to_speech(extracted_text)
+        audio_bytes = text_to_speech(extracted_text)
 
-            st.audio(audio_bytes, format="audio/mp3")
+        st.audio(audio_bytes, format="audio/mp3")
 
-            st.download_button(
-                label="⬇️ Download Audio",
-                data=audio_bytes,
-                file_name="speech.mp3",
-                mime="audio/mpeg"
-            )
+        st.download_button(
+            label="⬇️ Download Audio",
+            data=audio_bytes,
+            file_name="speech.mp3",
+            mime="audio/mpeg",
+            use_container_width=True
+        )
     else:
-        st.warning("⚠️ No text detected in the image.")
+        st.error("❌ No readable text found. Try again.")
 else:
-    st.info("Upload an image or take a photo to begin.")
+    st.info("Use the camera above to scan your document.")
+
+# --- Optional: Add spacing and large buttons for mobile UX ---
+st.markdown("""
+    <style>
+    .stButton > button {
+        font-size: 20px !important;
+        padding: 0.75em 2em;
+    }
+    .stTextArea textarea {
+        font-size: 18px;
+    }
+    </style>
+""", unsafe_allow_html=True)
