@@ -2,3 +2,5 @@ streamlit
 pytesseract
 Pillow
 gTTS
+opencv-python-headless
+numpy
