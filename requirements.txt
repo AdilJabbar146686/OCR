@@ -1,6 +1,6 @@
 streamlit
-pytesseract
 Pillow
-gTTS
-opencv-python-headless
 numpy
+opencv-python-headless
+gTTS
+easyocr
