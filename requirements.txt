@@ -1,6 +1,6 @@
 streamlit
-Pillow
-numpy
+pillow
 opencv-python-headless
+numpy
+paddleocr
 gTTS
-easyocr
